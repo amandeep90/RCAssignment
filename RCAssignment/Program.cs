@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace RCAssignment
+namespace RC.Assignment
 {
     class Program
     {
