@@ -5,6 +5,7 @@ using System.IO;
 namespace RC.Assignment
 {
     /// <summary>
+    /// The aim of this class it to facilitate organic testing by generating random test data.
     /// This is an artificial log files generator to build random sample input data for spot testing.
     /// Spits out one log file per device. File name format is Device_<deviceID>.txt.
     /// </summary>

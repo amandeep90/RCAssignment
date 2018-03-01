@@ -11,7 +11,7 @@ namespace RC.Assignment
     /// Responsible for processing event logs to aggregate number of fault sequences per device ID.
     /// Note: this class uses singleton design pattern since it does not need to preserve its instance state.
     /// </summary>
-    class EventCounter : IEventCounter
+    public class EventCounter : IEventCounter
     {
         // Make class singleton since it doesn't preserve any instance state. Having a single instance class is easier to unit test if mocking is neeeded.
         private static readonly EventCounter _instance = new EventCounter();
@@ -101,6 +101,11 @@ namespace RC.Assignment
             }
         }
 
+        public void ResetCounter()
+        {
+            _faultyEventsByDeviceId = new ConcurrentDictionary<string, int>();
+        }
+
         /// <summary>
         /// Contains logic to detect and flag a faulty sequence in series of log events.
         /// </summary>
@@ -164,7 +169,7 @@ namespace RC.Assignment
                     // Requirement : any number of cycles between stage 2 and 3 for any duration. It doesn't explicitly say if any means at least 1 or more cycles.
                     // Based on this statement, if n = "any number of cycles" then assuming n >=0. That means we may have zero cycles or we may have up to n cycles between 2 and 3.
 
-                    // It means the following sequence should be deemed faulty:
+                    // It means the following sequence should be deemed faulty (see unit test ParseEvents_FaultWithinThreeTransitions_OneFaultSequenceFound()):
                     //2001 - 01 - 01 22:24:00 3
                     //2001 - 01 - 01 22:29:00 2
                     //2001 - 01 - 01 22:37:00 0

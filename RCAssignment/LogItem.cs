@@ -35,14 +35,14 @@ namespace RC.Assignment
                 return false;
             }
 
-            bool result = DateTime.Equals(this.LogTime, other.LogTime);
+            bool result = DateTime.Equals(this.LogTime, other.LogTime) && this.Stage == other.Stage;
 
             return result;
         }
 
         public override int GetHashCode()
         {
-            int result = 397 ^ this.LogTime.GetHashCode();
+            int result = 397 ^ this.LogTime.GetHashCode() ^ this.Stage.GetHashCode();
 
             return result;
         }
