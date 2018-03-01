@@ -52,7 +52,6 @@ namespace RC.Assignment
             return logItems.Distinct().OrderBy(x => x.LogTime); // Uses IEquatable logic for distinct() defined in LogItems class.
         }
 
-        /// <returns></returns>
         /// <summary>
         /// Reads the content of the specified file.
         /// </summary>

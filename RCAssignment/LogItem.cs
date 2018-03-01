@@ -2,6 +2,9 @@
 
 namespace RC.Assignment
 {
+    /// <summary>
+    /// Represents log file data members.
+    /// </summary>
     class LogItem : ILogItem, IEquatable<LogItem>
     {
         public DateTime LogTime { get; set; }

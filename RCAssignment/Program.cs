@@ -6,17 +6,23 @@ using System.Threading.Tasks;
 
 namespace RC.Assignment
 {
+    /// <summary>
+    /// Entry point into application.
+    /// </summary>
     class Program
     {
+        /// <summary>
+        /// The main method for this project.
+        /// </summary>
+        /// <param name="args"></param>
         static void Main(string[] args)
         {
             // Removes previously generated log files, if any.
             Utilities.CleanUpDir(AppParams.LogFileDir);
 
-            // Spits out one log file per device. File name format is Device_<deviceID>.txt. 
+            // Generate new log files : spits out one log file per device. File name format is Device_<deviceID>.txt. 
             LogFilesGen testLogFileGen = new LogFilesGen(logFilesLmt: 10, logLinesLmt: 50);
             testLogFileGen.GenerateLogFiles();
-
 
             // Queue a separate task for processing each log file found in the log files directory.
             List<Task> logProcessorTasks = new List<Task>();
@@ -24,20 +30,22 @@ namespace RC.Assignment
 
             foreach (FileInfo fileInfo in logDirInfo.GetFiles("*.txt", SearchOption.TopDirectoryOnly))
             {
-                //ProcessLogFile(fileInfo);
                 var task = new Task(() => ProcessLogFile(fileInfo));
                 task.Start();
                 logProcessorTasks.Add(task);
             }
 
-            // Wait on all tasks to complete.
+            // Wait on all tasks to complete. The following statement blocks execution until all the taks are completed.
             Task.WaitAll(logProcessorTasks.ToArray());
-            Console.WriteLine("HOLA");
 
             // Clean up any generated log files.
             //Utilities.CleanUpDir(AppParams.LogFileDir);
         }
 
+        /// <summary>
+        /// Logic to handle one file per thread.
+        /// </summary>
+        /// <param name="fileInfo"> Log file to process </param>
         static void ProcessLogFile(FileInfo fileInfo)
         {
             string pattern = @"^device_(.+).txt";

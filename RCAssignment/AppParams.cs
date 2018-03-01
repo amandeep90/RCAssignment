@@ -1,5 +1,8 @@
 ﻿namespace RC.Assignment
 {
+    /// <summary>
+    /// Application level constants and properties.
+    /// </summary>
     static class AppParams
     {
         /// <summary>

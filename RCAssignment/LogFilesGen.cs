@@ -35,7 +35,7 @@ namespace RC.Assignment
         }
 
         /// <summary>
-        /// Generates a sample input log file for testing. File is stored under the "TestData" folder where app executes.
+        /// Generates a sample input log files for testing. Files are stored under the "TestData" folder where this app executes.
         /// </summary>
         public void GenerateLogFiles()
         {

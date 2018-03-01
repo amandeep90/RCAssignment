@@ -6,6 +6,11 @@ using System.Linq;
 
 namespace RC.Assignment
 {
+    /// <summary>
+    /// Provides thread safe implementation of IEventCounter. 
+    /// Responsible for processing event logs to aggregate number of fault sequences per device ID.
+    /// Note: this class uses singleton design pattern since it does not need to preserve its instance state.
+    /// </summary>
     class EventCounter : IEventCounter
     {
         // Make class singleton since it doesn't preserve any instance state. Having a single instance class is easier to unit test if mocking is neeeded.
@@ -18,8 +23,18 @@ namespace RC.Assignment
 
         }
 
+        /// <summary>
+        /// Instance of EventCounter to access class members.
+        /// </summary>
         public static EventCounter Instance => _instance;
 
+        /// <summary>
+        /// Gets number of faulty events for a given device ID.
+        /// </summary>
+        /// <param name="deviceID"> Id of device for which event count is requested. </param>
+        /// <returns> A number >= 0 denoting number of fault sequences. </returns>
+        /// <exception cref="ArgumentNullException"> If deviceID is null. </exception> 
+        /// <exception cref="ArgumentOutOfRangeException"> If deviceID is not found. </exception> 
         public int GetEventCount(string deviceID)
         {
             if (string.IsNullOrEmpty(deviceID))
@@ -36,11 +51,15 @@ namespace RC.Assignment
             else
             {
                 throw new ArgumentOutOfRangeException(nameof(deviceID));
-
-                //return eventCount;
             }
         }
 
+        /// <summary>
+        /// Parse and accumulate event information from the given log data.
+        /// </summary>
+        /// <param name="deviceID"> Device ID for the logs being processed. </param>
+        /// <param name="eventLog"> Instance of  StreamReader pointing to log file to process. </param>
+        /// <exception cref="ArgumentNullException"> If deviceID is null or empty and if eventLog is null </exception> 
         public void ParseEvents(string deviceID, StreamReader eventLog)
         {
             if (string.IsNullOrEmpty(deviceID))
@@ -82,10 +101,20 @@ namespace RC.Assignment
             }
         }
 
+        /// <summary>
+        /// Contains logic to detect and flag a faulty sequence in series of log events.
+        /// </summary>
         class SequenceValidator
         {
-            int? _lastStage = null;
-            DateTime? _lastTime;
+            /// <summary>
+            /// Last stage processed
+            /// </summary>
+            private int? _lastStage = null;
+
+            /// <summary>
+            /// Last log time processed
+            /// </summary>
+            private DateTime? _lastTime;
 
             /// <summary>
             /// Computes if transition from one stage to another is valid. 
@@ -134,7 +163,7 @@ namespace RC.Assignment
                 {
                     // Requirement : any number of cycles between stage 2 and 3 for any duration. It doesn't explicitly say if any means at least 1 or more cycles.
                     // Based on this statement, if n = "any number of cycles" then assuming n >=0. That means we may have zero cycles or we may have up to n cycles between 2 and 3.
-                    
+
                     // It means the following sequence should be deemed faulty:
                     //2001 - 01 - 01 22:24:00 3
                     //2001 - 01 - 01 22:29:00 2

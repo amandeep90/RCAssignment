@@ -2,6 +2,9 @@
 
 namespace RC.Assignment
 {
+    /// <summary>
+    /// Assignment requirements as is.
+    /// </summary>
     interface IEventCounter
     {
         /// <summary>
