@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace RC.Assignment
@@ -11,24 +12,44 @@ namespace RC.Assignment
     {
         static void Main(string[] args)
         {
-            //TestLogFileGen testLogFileGen = new TestLogFileGen(AppConfig.WorkingDir, 10);
-            //testLogFileGen.GenerateLogFile();
+            //Utilities.CleanUpDir(AppParams.LogFileDir);
 
-            TestLogFileReader testLogFileReader = new TestLogFileReader(AppConfig.WorkingDir);
-            string[] rawData = testLogFileReader.GetLogLines();
+            //LogFilesGen testLogFileGen = new LogFilesGen(logFilesLmt: 10, logLinesLmt: 50);
+            //testLogFileGen.GenerateLogFiles();
 
-            IEnumerable<ILogItem> parsedData = Utilities.ParseLogData(rawData);
+            List<Task> logProcessorTasks = new List<Task>();
 
-            SequenceValidator sequenceValidator = new SequenceValidator();
-            foreach (var logItem in parsedData)
+            DirectoryInfo logDirInfo = new DirectoryInfo(AppParams.LogFileDir);
+
+            foreach (FileInfo fileInfo in logDirInfo.GetFiles("*.txt", SearchOption.TopDirectoryOnly))
             {
-                var result = sequenceValidator.IsValidSequence(logItem.Stage, logItem.LogTime);
-                if (!result)
-                {
-                    Console.WriteLine(result);
-                }
+                //ProcessLogFile(fileInfo);
+                var task = new Task(() => ProcessLogFile(fileInfo));
+                task.Start();
+                logProcessorTasks.Add(task);
             }
 
+            Task.WaitAll(logProcessorTasks.ToArray());
+
+            //Utilities.CleanUpDir(AppParams.LogFileDir);
+        }
+
+        static void ProcessLogFile(FileInfo fileInfo)
+        {
+            string pattern = @"^device_(\d+).txt";
+            Regex rgx = new Regex(pattern, RegexOptions.IgnoreCase);
+            MatchCollection matches = rgx.Matches(fileInfo.Name);
+
+            if (matches.Count != 1 && matches[0].Groups.Count != 2)
+            {
+                return;
+            }
+
+            string deviceId = matches[0].Groups[1].Value;
+            StreamReader eventLog = new StreamReader(fileInfo.FullName);
+
+            EventCounter.Instance.ParseEvents(deviceId, eventLog);
+            Console.WriteLine(string.Format("Device ID : {0} | Fault Event Count : {1}", deviceId, EventCounter.Instance.GetEventCount(deviceId)));
         }
     }
 
@@ -47,7 +68,165 @@ namespace RC.Assignment
         /// <returns>An integer representing the number of detected events</returns>
         int GetEventCount(string deviceID);
     }
-    
+
+    class EventCounter : IEventCounter
+    {
+        // Make class singleton since it doesn't preserve any instance state. Having a single instance class is easier to unit test if mocking is neeeded.
+        private static readonly EventCounter _instance = new EventCounter();
+        private static ConcurrentDictionary<string, int> _faultyEventsByDeviceId = new ConcurrentDictionary<string, int>();
+
+        // Hide this constructor to enforce singleton pattern.
+        private EventCounter()
+        {
+
+        }
+
+        public static EventCounter Instance => _instance;
+
+        public int GetEventCount(string deviceID)
+        {
+            if (string.IsNullOrEmpty(deviceID))
+            {
+                throw new ArgumentNullException(nameof(deviceID));
+            }
+
+            int eventCount = 0;
+
+            if (_faultyEventsByDeviceId.TryGetValue(deviceID, out eventCount))
+            {
+                return eventCount;
+            }
+            else
+            {
+                throw new ArgumentOutOfRangeException(nameof(deviceID));
+
+                //return eventCount;
+            }
+        }
+
+        public void ParseEvents(string deviceID, StreamReader eventLog)
+        {
+            if (string.IsNullOrEmpty(deviceID))
+            {
+                throw new ArgumentNullException(nameof(deviceID));
+            }
+
+            if (eventLog == null)
+            {
+                throw new ArgumentNullException(nameof(eventLog));
+            }
+
+            string line;
+            ISet<string> rawData = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            while ((line = eventLog.ReadLine()) != null)
+            {
+                rawData.Add(line);
+            }
+
+            eventLog.Close();
+            eventLog.Dispose();
+
+            IEnumerable<ILogItem> parsedData = Utilities.ParseLogData(rawData.ToArray());
+
+            _faultyEventsByDeviceId.TryAdd(deviceID, 0);
+
+            SequenceValidator sequenceValidator = new SequenceValidator();
+
+            foreach (var logItem in parsedData)
+            {
+                var result = sequenceValidator.IsValidSequence(logItem.Stage, logItem.LogTime);
+                if (!result)
+                {
+                    // Faulty sequence detected
+
+                    _faultyEventsByDeviceId.AddOrUpdate(deviceID, 1, (k, v) => v + 1);
+                }
+            }
+        }
+
+        class SequenceValidator
+        {
+            int? _lastStage = null;
+            DateTime? _lastTime;
+
+            /// <summary>
+            /// Computes if transition from one stage to another is valid. 
+            /// </summary>
+            /// <param name="currentStage">Stage value between 0 to 3</param>
+            /// <param name="currentTime">Log time in ISO-8601 format</param>
+            /// <returns>True if not a faulty sequence. False if faulty sequence is detected.</returns>
+            public bool IsValidSequence(int currentStage, DateTime currentTime)
+            {
+                if (currentStage < 0 || currentStage > 3)
+                {
+                    throw new InvalidDataException("Unsupported stage value found while parsing log entries");
+                }
+
+                if (!_lastStage.HasValue)
+                {
+                    if (currentStage == 3)
+                    {
+                        // First transition from nothing to 3.
+
+                        _lastStage = currentStage;
+                        _lastTime = currentTime;
+                    }
+
+                    return true;
+                }
+
+                if (_lastStage == currentStage)
+                {
+                    // Duplicated data. Ignore it.
+
+                    return true;
+                }
+
+                if (_lastStage == 3 && currentStage == 2 && _lastTime.HasValue && (currentTime - _lastTime.Value).TotalMinutes >= 5)
+                {
+                    // Second transition from 3 to 2 after 5 or more mins. 
+
+                    _lastStage = 2;
+                    _lastTime = null; // Once this is null, following 3 to 2 transitions does not need to check duration. 
+
+                    return true;
+                }
+
+                if (_lastStage.HasValue && !_lastTime.HasValue) // We're passed the second transition. Now we are only concerned with where we go next. 1 = reset and 0 = fault.
+                {
+                    // Requirement : any number of cycles between stage 2 and 3 for any duration. It doesn't explicitly say if any means at least 1 or more cycles.
+                    // Based on this statement, if n = "any number of cycles" then assuming n >=0. That means we may have zero cycles or we may have up to n cycles between 2 and 3.
+                    
+                    // It means the following sequence should be deemed faulty:
+                    //2001 - 01 - 01 22:24:00 3
+                    //2001 - 01 - 01 22:29:00 2
+                    //2001 - 01 - 01 22:37:00 0
+
+                    if (currentStage == 0)
+                    {
+                        // Fault sequence reached. Return false. 
+
+                        _lastStage = null;
+
+                        return false;
+                    }
+
+                    if (currentStage == 2 || currentStage == 3)
+                    {
+                        // Simply move to next log item.
+
+                        return true;
+                    }
+                }
+
+                _lastStage = null; // Next fault sequence not found. Reset.
+                _lastTime = null;
+
+                return true;
+            }
+        }
+    }
 
     interface ILogItem
     {
@@ -101,17 +280,26 @@ namespace RC.Assignment
         #endregion IEquatable
     }
 
-    static class AppConfig
+    static class AppParams
     {
         /// <summary>
         /// Working directory to be used for this project. Points to the folder where application is being executed.
         /// </summary>
         public static string WorkingDir => System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
-        public static string SampleLogFileDir => "TestData";
+        public static string LogFileDir => string.Format("{0}\\TestData", WorkingDir);
 
-        public static string SampleLogFileName => "SampleInput.txt";
+        private static int fileCount = 0;
 
+        public static string LogFileName
+        {
+            get
+            {
+                fileCount += 1;
+
+                return string.Format("{0}\\Device_{1}.txt", LogFileDir, fileCount);
+            }
+        }
     }
 
     static class Utilities
@@ -124,6 +312,11 @@ namespace RC.Assignment
         public static IEnumerable<ILogItem> ParseLogData(string[] data)
         {
             IList<ILogItem> logItems = new List<ILogItem>();
+
+            if (data.Length == 0)
+            {
+                return logItems;
+            }
 
             foreach (var rawLine in data)
             {
@@ -152,142 +345,102 @@ namespace RC.Assignment
 
             return logItems.Distinct().OrderBy(x => x.LogTime); // Uses IEquatable logic for distinct() defined in LogItems class.
         }
-    }
 
-    class SequenceValidator
-    {
-        int? _lastStage = null;
-        DateTime? _lastTime;
-
-        public bool IsValidSequence(int currentStage, DateTime currentTime)
-        {
-            if (currentStage < 0 || currentStage > 3)
-            {
-                throw new InvalidDataException("Unsupported stage value found while parsing log entries");
-            }
-
-            if (!_lastStage.HasValue)
-            {
-                if (currentStage == 3)
-                {
-                    // First transition from nothing to 3.
-
-                    _lastStage = currentStage;
-                    _lastTime = currentTime;
-                }
-
-                return true;
-            }
-
-            if (_lastStage == currentStage)
-            {
-                // Duplicated data. Ignore it.
-
-                return true;
-            }
-
-            if (_lastStage == 3 && currentStage == 2 && _lastTime.HasValue && (currentTime - _lastTime.Value).TotalMinutes >= 5)
-            {
-                // Second transition from 3 to 2 after 5 or more mins. 
-
-                _lastStage = 2;
-                _lastTime = null; // Once this is null, following 3 to 2 transitions does not need to check duration. 
-
-                return true;
-            }
-
-            if (_lastStage.HasValue && !_lastTime.HasValue) // We're passed the second transition. Now we are only concerned with where we go next. 1 = reset and 0 = fault.
-            {
-                if (currentStage == 0)
-                {
-                    // Fault sequence reached. Return false. 
-
-                    _lastStage = null;
-
-                    return false;
-                }
-
-                if (currentStage == 2 || currentStage == 3)
-                {
-                    // Simply move to next log item.
-
-                    return true;
-                }
-            }
-
-            _lastStage = null; // Next fault sequence not found. Reset.
-            _lastTime = null;
-
-            return true;
-        }
-    }
-
-    class TestLogFileReader
-    {
-        private string _rootPath;
-
-        public TestLogFileReader(string rootPath)
-        {
-            _rootPath = rootPath;
-        }
-
-        /// <summary>
-        /// Gets all the log lines contained in the sample input file for testing.
-        /// </summary>
         /// <returns></returns>
-        public string[] GetLogLines()
+        /// <summary>
+        /// Reads the content of the specified file.
+        /// </summary>
+        /// <param name="fileName"> Full path including file name. </param>
+        /// <returns> All the lines in the specified file. </returns>
+        public static string[] GetLogLines(string fileName)
         {
-
-            string logFileDir = string.Format("{0}\\{1}", _rootPath, AppConfig.SampleLogFileDir);
-            string logFileName = string.Format("{0}\\{1}", logFileDir, AppConfig.SampleLogFileName);
-
-            if (!File.Exists(logFileName))
+            if (!File.Exists(fileName))
             {
-                throw new FileNotFoundException("Couldn't locate log file at " + logFileName);
+                throw new FileNotFoundException("Couldn't locate log file at " + fileName);
             }
 
-            string[] readText = File.ReadAllLines(logFileName);
+            string[] readText = File.ReadAllLines(fileName);
 
             return readText;
         }
+
+        /// <summary>
+        /// Deletes all the files in a directory.
+        /// </summary>
+        /// <param name="path"> Absolute path to clean up. </param>
+        public static void CleanUpDir(string path)
+        {
+            if (!Directory.Exists(path))
+            {
+                return;
+            }
+
+            DirectoryInfo di = new DirectoryInfo(path);
+
+            foreach (FileInfo file in di.GetFiles())
+            {
+                file.Delete();
+            }
+        }
+
+        private static readonly Random getrandom = new Random();
+
+        /// <summary>
+        /// Generates a random number between the specified range.
+        /// </summary>
+        /// <param name="min"> Inclusive minimum bound for return value </param>
+        /// <param name="max"> Inclusive maximum bound for return value </param>
+        /// <returns> A random value within specified range </returns>
+        public static int GetRandomNumber(int min, int max)
+        {
+            lock (getrandom) // synchronize
+            {
+                return getrandom.Next(min, max + 1);
+            }
+        }
     }
 
-    class TestLogFileGen
+    class LogFilesGen
     {
-        private string _rootPath;
         private TestDataGen _testDataGen;
+        private int _logFilesLmt;
 
-        public TestLogFileGen(string rootPath, int logLinesLmt)
+        public LogFilesGen(int logFilesLmt, int logLinesLmt)
         {
-            _rootPath = rootPath;
+            if (logFilesLmt > 1000 && logFilesLmt < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(logFilesLmt));
+            }
+
+            if (logLinesLmt > 100 && logLinesLmt < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(logLinesLmt));
+            }
+
+            _logFilesLmt = logFilesLmt;
             _testDataGen = new TestDataGen(logLinesLmt);
         }
 
         /// <summary>
         /// Generates a sample input log file for testing. File is stored under the "TestData" folder where app executes.
         /// </summary>
-        public void GenerateLogFile()
+        public void GenerateLogFiles()
         {
-            if (!Directory.Exists(_rootPath))
+            if (!Directory.Exists(AppParams.LogFileDir))
             {
-                throw new DirectoryNotFoundException("Invalid root directory provided to the log file generator");
+                Directory.CreateDirectory(AppParams.LogFileDir);
             }
 
-            string logFileDir = string.Format("{0}\\{1}", _rootPath, AppConfig.SampleLogFileDir);
-            string logFileName = string.Format("{0}\\{1}", logFileDir, AppConfig.SampleLogFileName);
-
-            if (!Directory.Exists(logFileDir))
+            for (int i = 0; i < _logFilesLmt; i++)
             {
-                Directory.CreateDirectory(logFileDir);
-            }
+                IList<string> logLines = _testDataGen.GenerateData();
 
-            IList<string> logLines = _testDataGen.GenerateData();
-
-            using (StreamWriter file = new StreamWriter(logFileName, false))
-            {
-                foreach (var line in logLines)
+                using (StreamWriter file = new StreamWriter(AppParams.LogFileName, false))
                 {
-                    file.WriteLine(line);
+                    foreach (var line in logLines)
+                    {
+                        file.WriteLine(line);
+                    }
                 }
             }
         }
@@ -297,7 +450,6 @@ namespace RC.Assignment
     {
         private int _targetLines;
         private DateTime _startTime;
-        private readonly Random getrandom = new Random();
 
         public TestDataGen(int linesLmt)
         {
@@ -332,24 +484,12 @@ namespace RC.Assignment
         /// <returns> A line for log in this format: "1998-03-07 06:25:32	2" </returns>
         private string getSampleLog()
         {
-            _startTime = _startTime.AddMinutes(getRandomNumber(1, 10));
-            string line = string.Format("{0}\t{1}", _startTime.ToString("yyyy-MM-dd HH:mm:ss"), getRandomNumber(0, 3));
+            _startTime = _startTime.AddMinutes(Utilities.GetRandomNumber(1, 10));
+            string line = string.Format("{0}\t{1}", _startTime.ToString("yyyy-MM-dd HH:mm:ss"), Utilities.GetRandomNumber(0, 3));
 
             return line;
         }
 
-        /// <summary>
-        /// Generates a random number between the specified range.
-        /// </summary>
-        /// <param name="min"> Inclusive minimum bound for return value </param>
-        /// <param name="max"> Inclusive maximum bound for return value </param>
-        /// <returns> A random value within specified range </returns>
-        private int getRandomNumber(int min, int max)
-        {
-            lock (getrandom) // synchronize
-            {
-                return getrandom.Next(min, max + 1);
-            }
-        }
+
     }
 }
