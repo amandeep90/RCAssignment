@@ -42,8 +42,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AppParams.cs" />
+    <Compile Include="EventCounter.cs" />
+    <Compile Include="IEventCounter.cs" />
+    <Compile Include="ILogItem.cs" />
+    <Compile Include="LogFilesGen.cs" />
+    <Compile Include="LogItem.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TestDataGen.cs" />
+    <Compile Include="Utilities.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

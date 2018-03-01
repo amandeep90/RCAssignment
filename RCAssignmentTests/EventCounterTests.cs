@@ -4,7 +4,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace RCAssignmentTests
 {
     [TestClass]
-    public class UnitTest1
+    public class EventCounterTests
     {
         [TestMethod]
         public void TestMethod1()
