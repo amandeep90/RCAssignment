@@ -17,12 +17,7 @@ namespace RC.Assignment
         /// </summary>
         /// <param name="linesLmt"></param>
         public TestDataGen(int linesLmt)
-        {
-            if (linesLmt < 2)
-            {
-                throw new InvalidDataException("Please generate at least two lines of data");
-            }
-
+        {           
             _targetLines = linesLmt;
             _startTime = new DateTime(2001, 1, 1); // Should be enough to generate ample amount of test data.
         }

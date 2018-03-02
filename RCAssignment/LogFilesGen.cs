@@ -26,7 +26,7 @@ namespace RC.Assignment
                 throw new ArgumentOutOfRangeException(nameof(logFilesLmt));
             }
 
-            if (logLinesLmt > 100 && logLinesLmt < 1)
+            if (logLinesLmt > 1000 && logLinesLmt < 1)
             {
                 throw new ArgumentOutOfRangeException(nameof(logLinesLmt));
             }
