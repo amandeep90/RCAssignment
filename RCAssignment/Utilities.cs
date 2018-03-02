@@ -103,5 +103,34 @@ namespace RC.Assignment
                 return getrandom.Next(min, max + 1);
             }
         }
+
+        /// <summary>
+        /// Reads a number from console window
+        /// </summary>
+        /// <param name="prompt"> Message to show to get the input value </param>
+        /// <param name="error"> Error to show when input is incorrect </param>
+        /// <param name="lowerLmt"> Lowest accepted value </param>
+        /// <param name="upperLmt"> Highest accepted value </param>
+        /// <returns> Integer value </returns>
+        public static int ReadNumberFromConsole(string prompt, string error, int lowerLmt, int upperLmt)
+        {
+            int number = 0;
+            bool validInput = false;
+            do
+            {
+                Console.Write(prompt);
+                string logFilesInput = Console.ReadLine();
+                validInput = int.TryParse(logFilesInput, out number);
+
+                if (!validInput || (number < lowerLmt || number > upperLmt))
+                {
+                    Console.WriteLine(error);
+                    validInput = false;
+                }
+
+            } while (!validInput);
+
+            return number;
+        }
     }
 }
