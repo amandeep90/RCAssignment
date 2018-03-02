@@ -51,24 +51,7 @@ namespace RC.Assignment
 
             return logItems.Distinct().OrderBy(x => x.LogTime); // Uses IEquatable logic for distinct() defined in LogItems class.
         }
-
-        /// <summary>
-        /// Reads the content of the specified file.
-        /// </summary>
-        /// <param name="fileName"> Full path including file name. </param>
-        /// <returns> All the lines in the specified file. </returns>
-        public static string[] GetLogLines(string fileName)
-        {
-            if (!File.Exists(fileName))
-            {
-                throw new FileNotFoundException("Couldn't locate log file at " + fileName);
-            }
-
-            string[] readText = File.ReadAllLines(fileName);
-
-            return readText;
-        }
-
+                
         /// <summary>
         /// Deletes all the files in a directory.
         /// </summary>
