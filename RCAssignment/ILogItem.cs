@@ -5,7 +5,7 @@ namespace RC.Assignment
     /// <summary>
     /// Represents log file data members.
     /// </summary>
-    interface ILogItem
+    public interface ILogItem
     {
         DateTime LogTime { get; set; }
 

@@ -8,7 +8,7 @@ namespace RC.Assignment
     /// <summary>
     /// Collection of reusable utility functions.
     /// </summary>
-    static class Utilities
+    public static class Utilities
     {
         /// <summary>
         /// Parses log data, line by line, stored in the log file format. Example "2011-03-07 06:25:32 2"

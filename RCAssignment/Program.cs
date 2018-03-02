@@ -31,9 +31,10 @@ namespace RC.Assignment
             foreach (FileInfo fileInfo in logDirInfo.GetFiles("*.txt", SearchOption.TopDirectoryOnly))
             {
                 var task = new Task(() => ProcessLogFile(fileInfo));
-                task.Start();
                 logProcessorTasks.Add(task);
             }
+
+            logProcessorTasks.ForEach(x => x.Start());
 
             // Wait on all tasks to complete. The following statement blocks execution until all the taks are completed.
             Task.WaitAll(logProcessorTasks.ToArray());
