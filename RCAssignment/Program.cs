@@ -25,7 +25,8 @@ namespace RC.Assignment
                 // Removes previously generated log files, if any.
                 Utilities.CleanUpDir(AppParams.LogFileDir);
 
-                Console.WriteLine("This app generates sample log files with random data to facilitate organic testing. Please find 'TestData' folder in the same directory where the RCAssignment.exe is located.");
+                Console.WriteLine("Please press Alt+Enter to full screen for improved readability.");
+                Console.WriteLine("\nThis app generates sample log files with random data to facilitate organic testing. Please find 'TestData' folder in the same directory where the RCAssignment.exe is located.\n");
 
                 // Generate new log files : spits out one log file per device. File name format is Device_<deviceID>.txt. 
                 LogFilesGen testLogFileGen = new LogFilesGen(logFilesLmt: readLogFilesLmt(), logLinesLmt: readLogEntiesLmt());
