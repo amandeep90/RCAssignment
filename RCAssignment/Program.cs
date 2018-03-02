@@ -80,8 +80,12 @@ namespace RC.Assignment
 
             string deviceId = matches[0].Groups[1].Value;
             StreamReader eventLog = new StreamReader(fileInfo.FullName);
-            EventCounter.Instance.ParseEvents(deviceId, eventLog);
-            Console.WriteLine(string.Format("File : {0} | Device ID : {1} | Fault Event Count : {2}", fileInfo.Name, deviceId, EventCounter.Instance.GetEventCount(deviceId)));
+
+            IEventCounter eventCounter = EventCounter.Instance;
+            eventCounter.ParseEvents(deviceId, eventLog);
+            int faultySeqCount = eventCounter.GetEventCount(deviceId);
+
+            Console.WriteLine(string.Format("File : {0} | Device ID : {1} | Fault Event Count : {2}", fileInfo.Name, deviceId, faultySeqCount));
         }
 
         private static int readLogFilesLmt()
